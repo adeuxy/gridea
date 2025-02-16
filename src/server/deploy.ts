@@ -1,4 +1,5 @@
 import fs from 'fs'
+import * as fse from 'fs-extra'
 import moment from 'moment'
 // @ts-ignore
 import Model from './model'
@@ -8,6 +9,8 @@ const git = require('isomorphic-git')
 
 export default class Deploy extends Model {
   outputDir: string = this.buildDir
+
+  deployDir: string = `${this.buildDir}4deploy`
 
   remoteUrl = ''
 
@@ -45,7 +48,8 @@ export default class Deploy extends Model {
       const { setting } = this.db
       let isRepo = false
       try {
-        await git.currentBranch({ fs, dir: this.outputDir })
+        fse.copySync(this.outputDir, this.deployDir)
+        await git.currentBranch({ fs, dir: this.deployDir })
         isRepo = true
       } catch (e) {
         console.log('Not a repo', e.message)
@@ -58,24 +62,24 @@ export default class Deploy extends Model {
         }
       }
       if (!isRepo) {
-        await git.init({ fs, dir: this.outputDir })
+        await git.init({ fs, dir: this.deployDir })
         await git.setConfig({
           fs,
-          dir: this.outputDir,
+          dir: this.deployDir,
           path: 'user.name',
           value: setting.username,
         })
         await git.setConfig({
           fs,
-          dir: this.outputDir,
+          dir: this.deployDir,
           path: 'user.email',
           value: setting.email,
         })
+        await git.addRemote({
+          fs, dir: this.deployDir, remote: 'origin', url: this.remoteUrl, force: true,
+        })
       }
 
-      await git.addRemote({
-        fs, dir: this.outputDir, remote: 'origin', url: this.remoteUrl, force: true,
-      })
       const info = await git.getRemoteInfo({
         http: this.http,
         url: this.remoteUrl,
@@ -100,7 +104,7 @@ export default class Deploy extends Model {
     }
     let isRepo = false
     try {
-      await git.currentBranch({ fs, dir: this.outputDir })
+      await git.currentBranch({ fs, dir: this.deployDir })
       isRepo = true
     } catch (e) {
       console.log('Not a repo', e.message)
@@ -118,18 +122,15 @@ export default class Deploy extends Model {
     const { setting } = this.db
     const localBranchs = {}
     try {
-      const statusSummary = await git.status({ fs, dir: this.outputDir, filepath: '.' })
+      const statusSummary = await git.status({ fs, dir: this.deployDir, filepath: '.' })
       console.log('statusSummary', statusSummary)
-      await git.addRemote({
-        fs, dir: this.outputDir, remote: 'origin', url: this.remoteUrl, force: true,
-      })
 
       if (statusSummary !== 'unmodified') {
-        await git.add({ fs, dir: this.outputDir, filepath: '.' })
+        await git.add({ fs, dir: this.deployDir, filepath: '.' })
         await git.commit({
           fs,
-          dir: this.outputDir,
-          message: `update from gridea: ${moment().format('YYYY-MM-DD HH:mm:ss')}`,
+          dir: this.deployDir,
+          message: `update from gridea-0.9.4: ${moment().format('YYYY-MM-DD HH:mm:ss')}`,
         })
       }
 
@@ -138,7 +139,7 @@ export default class Deploy extends Model {
       const pushRes = await git.push({
         fs,
         http: this.http,
-        dir: this.outputDir,
+        dir: this.deployDir,
         remote: 'origin',
         ref: setting.branch,
         force: true,
@@ -167,15 +168,15 @@ export default class Deploy extends Model {
    */
   async checkCurrentBranch() {
     const { setting } = this.db
-    const currentBranch = await git.currentBranch({ fs, dir: this.outputDir, fullname: false })
-    const localBranches = await git.listBranches({ fs, dir: this.outputDir })
+    const currentBranch = await git.currentBranch({ fs, dir: this.deployDir, fullname: false })
+    const localBranches = await git.listBranches({ fs, dir: this.deployDir })
 
     if (currentBranch !== setting.branch) {
       if (!localBranches.includes(setting.branch)) {
-        await git.branch({ fs, dir: this.outputDir, ref: setting.branch })
+        await git.branch({ fs, dir: this.deployDir, ref: setting.branch })
       }
 
-      await git.checkout({ fs, dir: this.outputDir, ref: setting.branch })
+      await git.checkout({ fs, dir: this.deployDir, ref: setting.branch })
     }
   }
 }
