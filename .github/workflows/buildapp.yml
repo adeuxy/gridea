@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'  # 只在标签（如 v1.0.0）推送时触发
+  workflow_dispatch:  # 支持手动触发
+    inputs:
+      release_version:
+        description: 'Release Version'
+        required: true
+        default: 'v1.0.0'
 
 jobs:
   build:
