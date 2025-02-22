@@ -1,0 +1,58 @@
+name: Build Electron App and Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # 只在标签（如 v1.0.0）推送时触发
+
+jobs:
+  build:
+    runs-on: ubuntu-latest  # 默认运行在 Ubuntu 上，但会同时为其他平台构建
+    
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]  # 三个平台分别构建
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '14'  # 你可以根据你的项目需要选择 Node.js 的版本
+
+      - name: Cache Node.js modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.yarn
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+          
+      - name: Install dependencies
+        run: |
+          yarn install
+
+      - name: Build Electron App
+        run: |
+          yarn electron:build --mac --win --linux
+
+      - name: Upload build artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-builds
+          path: dist/
+
+      - name: Create GitHub Release
+        if: success()  # 只有构建成功才会执行发布步骤
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**/*  # 上传 dist 文件夹中的所有文件
+
+      - name: Publish GitHub Release
+        if: success()  # 只有创建 Release 成功才会发布
+        run: |
+          git tag -a "${GITHUB_REF##*/}" -m "Release ${GITHUB_REF##*/}"  # 为当前标签添加描述
+          git push origin "${GITHUB_REF##*/}"  # 推送标签到 GitHub
